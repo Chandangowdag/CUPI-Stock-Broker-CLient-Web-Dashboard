@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+
+  body {
+    @apply bg-surface-0 text-slate-200 font-sans antialiased;
+    min-height: 100dvh;
+  }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
+}
+
+@layer components {
+  .glass {
+    background: rgba(24, 31, 46, 0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(30, 45, 69, 0.8);
+  }
+
+  .price-up { color: #00ff88; }
+  .price-down { color: #ff4466; }
+  .price-flat { color: #94a3b8; }
+
+  /* Ticker flash animation on price change */
+  @keyframes flash-green {
+    0% { background-color: rgba(0, 255, 136, 0.15); }
+    100% { background-color: transparent; }
+  }
+  @keyframes flash-red {
+    0% { background-color: rgba(255, 68, 102, 0.15); }
+    100% { background-color: transparent; }
+  }
+  .flash-up { animation: flash-green 0.5s ease-out; }
+  .flash-down { animation: flash-red 0.5s ease-out; }
+}
