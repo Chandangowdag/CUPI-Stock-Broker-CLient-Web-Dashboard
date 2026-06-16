@@ -58,6 +58,19 @@ class PriceHistory(Base):
     recorded_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class Candle(Base):
+    """1-minute aggregated OHLC bars for analysis."""
+    __tablename__ = "candles"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    symbol     = Column(String, nullable=False, index=True)
+    open       = Column(Float, nullable=False)
+    high       = Column(Float, nullable=False)
+    low        = Column(Float, nullable=False)
+    close      = Column(Float, nullable=False)
+    timestamp  = Column(DateTime(timezone=True), nullable=False)
+
+
 class Portfolio(Base):
     """Virtual portfolio: how many shares of each stock a user holds."""
     __tablename__ = "portfolio"

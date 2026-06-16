@@ -3,7 +3,7 @@
  * Automatically attaches the Authorization: Bearer <token> header.
  */
 
-const BASE = 'http://localhost:8000'
+const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 async function request(path, { method = 'GET', body, token } = {}) {
   const headers = { 'Content-Type': 'application/json' }
@@ -41,6 +41,9 @@ export const fetchStocks = (token) =>
 
 export const fetchStockHistory = (symbol, token, limit = 60) =>
   request(`/stocks/${symbol}/history?limit=${limit}`, { token })
+
+export const fetchStockCandles = (symbol, token, limit = 50) =>
+  request(`/stocks/${symbol}/candles?limit=${limit}`, { token })
 
 // ── Subscriptions ─────────────────────────────────────────────────────────────
 

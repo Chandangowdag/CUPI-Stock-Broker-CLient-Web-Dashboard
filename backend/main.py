@@ -26,9 +26,9 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 
-from database import get_db, init_db
+from database import get_db, init_db, AsyncSessionLocal
 from models import (
-    User, Subscription,
+    User, Subscription, Candle,
     RegisterRequest, LoginRequest, SubscriptionRequest, TradeRequest, TokenResponse
 )
 from auth import (
@@ -38,6 +38,7 @@ from auth import (
 from websocket_manager import manager
 from stock_engine import (
     generate_price, get_snapshot, get_missed_updates, get_history,
+    aggregate_candle, seed_candles,
     SUPPORTED_STOCKS
 )
 from portfolio_service import (
@@ -65,12 +66,26 @@ async def price_broadcast_loop():
             tick = generate_price(symbol)
             await manager.broadcast_tick(tick)
 
+            # Aggregate and save candles
+            candle_data = aggregate_candle(symbol, tick)
+            if candle_data:
+                async def save_candle(data):
+                    async with AsyncSessionLocal() as db:
+                        db.add(Candle(**data))
+                        await db.commit()
+                asyncio.create_task(save_candle(candle_data))
+
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    
+    # Seed historical candles for analysis
+    async with AsyncSessionLocal() as db:
+        await seed_candles(db)
+
     task = asyncio.create_task(price_broadcast_loop())
     logger.info("DB initialised. Price broadcast started.")
     yield
@@ -175,6 +190,40 @@ async def stock_history(symbol: str, limit: int = 60, _: User = Depends(get_curr
     if symbol not in SUPPORTED_STOCKS:
         raise HTTPException(status_code=404, detail="Unknown symbol")
     return {"symbol": symbol, "history": get_history(symbol, limit)}
+
+
+@app.get("/stocks/{symbol}/candles")
+async def stock_candles(
+    symbol: str,
+    limit: int = 50,
+    _: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Return historical 1-minute OHLC candles for a symbol."""
+    symbol = symbol.upper()
+    if symbol not in SUPPORTED_STOCKS:
+        raise HTTPException(status_code=404, detail="Unknown symbol")
+
+    result = await db.execute(
+        select(Candle)
+        .where(Candle.symbol == symbol)
+        .order_by(Candle.timestamp.desc())
+        .limit(limit)
+    )
+    candles = result.scalars().all()
+    return {
+        "symbol": symbol,
+        "candles": [
+            {
+                "time": c.timestamp.isoformat(),
+                "open": c.open,
+                "high": c.high,
+                "low": c.low,
+                "close": c.close
+            }
+            for c in reversed(candles)
+        ]
+    }
 
 
 # ── Subscription endpoints ────────────────────────────────────────────────────

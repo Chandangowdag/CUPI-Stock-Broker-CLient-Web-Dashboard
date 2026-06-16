@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
-import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts'
+import { AreaChart, Area, ResponsiveContainer, Tooltip, YAxis } from 'recharts'
+import CandleChart from './CandleChart'
+import { fetchStockCandles } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 const STOCK_META = {
   GOOG: { name: 'Alphabet',  color: '#4285F4' },
@@ -22,10 +25,17 @@ const STOCK_META = {
  *   userShares    — how many shares this user owns
  */
 export default function StockCard({ symbol, price, change, timestamp, history, onTrade, userShares }) {
+  const { token } = useAuth()
   const [flashClass, setFlashClass] = useState('')
   const [showTrade, setShowTrade] = useState(false)
   const [shares, setShares] = useState('1')
   const [tradeLoading, setTradeLoading] = useState(false)
+  
+  // New state for analysis view
+  const [view, setView] = useState('sparkline') // 'sparkline' | 'candle'
+  const [candles, setCandles] = useState([])
+  const [candleLoading, setCandleLoading] = useState(false)
+  
   const prevPrice = useRef(price)
 
   // Flash animation on price change
@@ -36,6 +46,17 @@ export default function StockCard({ symbol, price, change, timestamp, history, o
     const t = setTimeout(() => setFlashClass(''), 500)
     return () => clearTimeout(t)
   }, [price])
+
+  // Fetch candles when switching to analysis view
+  useEffect(() => {
+    if (view === 'candle' && token) {
+      setCandleLoading(true)
+      fetchStockCandles(symbol, token)
+        .then(data => setCandles(data.candles))
+        .catch(err => console.error('Failed to fetch candles', err))
+        .finally(() => setCandleLoading(false))
+    }
+  }, [view, symbol, token])
 
   const handleTrade = useCallback(async (action) => {
     const qty = parseFloat(shares)
@@ -96,11 +117,36 @@ export default function StockCard({ symbol, price, change, timestamp, history, o
           </div>
         </div>
 
-        {/* Sparkline — real recharts AreaChart */}
-        {chartData.length > 1 && (
+        {/* View Toggle (Sparkline vs Candle) */}
+        <div className="flex gap-1 mb-3">
+          <button
+            onClick={() => setView('sparkline')}
+            className={`text-[9px] uppercase tracking-tighter px-2 py-0.5 rounded border transition-all ${
+              view === 'sparkline' 
+                ? 'bg-slate-700 border-slate-600 text-slate-200' 
+                : 'bg-transparent border-transparent text-slate-500 hover:text-slate-400'
+            }`}
+          >
+            Live
+          </button>
+          <button
+            onClick={() => setView('candle')}
+            className={`text-[9px] uppercase tracking-tighter px-2 py-0.5 rounded border transition-all ${
+              view === 'candle' 
+                ? 'bg-slate-700 border-slate-600 text-slate-200' 
+                : 'bg-transparent border-transparent text-slate-500 hover:text-slate-400'
+            }`}
+          >
+            Analysis
+          </button>
+        </div>
+
+        {/* Sparkline View */}
+        {view === 'sparkline' && chartData.length > 1 && (
           <div className="h-14 -mx-1 mb-3">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
+                <YAxis hide domain={['auto', 'auto']} />
                 <defs>
                   <linearGradient id={`grad-${symbol}`} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={chartColor} stopOpacity={0.25} />
@@ -127,6 +173,19 @@ export default function StockCard({ symbol, price, change, timestamp, history, o
                 />
               </AreaChart>
             </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Candlestick Analysis View */}
+        {view === 'candle' && (
+          <div className="h-40 -mx-1 mb-3">
+            {candleLoading ? (
+              <div className="h-full flex items-center justify-center animate-pulse text-[10px] text-slate-600 font-mono">
+                Loading history...
+              </div>
+            ) : (
+              <CandleChart symbol={symbol} data={candles} color={meta.color} />
+            )}
           </div>
         )}
 

@@ -34,6 +34,12 @@ price_buffer: Dict[str, Deque[dict]] = {
     s: deque(maxlen=HISTORY_DEPTH) for s in SUPPORTED_STOCKS
 }
 
+# Current candle state per symbol: {open, high, low, close, count}
+candle_accumulator: Dict[str, dict] = {
+    s: {"open": None, "high": -float('inf'), "low": float('inf'), "close": 0.0, "count": 0}
+    for s in SUPPORTED_STOCKS
+}
+
 
 def generate_price(symbol: str) -> dict:
     """
@@ -97,3 +103,76 @@ def get_history(symbol: str, limit: int = 60) -> List[dict]:
     buf = price_buffer.get(symbol, deque())
     items = list(buf)
     return items[-limit:]
+
+
+def aggregate_candle(symbol: str, tick: dict) -> dict | None:
+    """
+    Update the current 1-minute candle with a new tick.
+    Returns a completed candle dict every 60 ticks, otherwise None.
+    """
+    price = tick["price"]
+    acc = candle_accumulator[symbol]
+
+    if acc["open"] is None:
+        acc["open"] = price
+
+    acc["high"] = max(acc["high"], price)
+    acc["low"] = min(acc["low"], price)
+    acc["close"] = price
+    acc["count"] += 1
+
+    # 1-minute candle = 60 ticks at 1s interval
+    if acc["count"] >= 60:
+        candle = {
+            "symbol": symbol,
+            "open": acc["open"],
+            "high": acc["high"],
+            "low": acc["low"],
+            "close": acc["close"],
+            "timestamp": datetime.now(timezone.utc)
+        }
+        # Reset accumulator
+        candle_accumulator[symbol] = {
+            "open": None, "high": -float('inf'), "low": float('inf'), "close": 0.0, "count": 0
+        }
+        return candle
+    return None
+
+
+async def seed_candles(db):
+    """
+    Generate 50 historical 1-minute candles for each stock if none exist.
+    Provides immediate analysis data on first run.
+    """
+    from sqlalchemy import select, func
+    from models import Candle
+    import datetime as dt
+
+    for symbol in SUPPORTED_STOCKS:
+        # Check if candles already exist
+        res = await db.execute(select(func.count(Candle.id)).where(Candle.symbol == symbol))
+        if res.scalar() > 0:
+            continue
+
+        base = BASE_PRICES[symbol]
+        last_close = base
+        now = datetime.now(timezone.utc)
+
+        for i in range(50, 0, -1):
+            ts = now - dt.timedelta(minutes=i)
+            # Random walk for the candle
+            o = round(last_close * (1 + random.uniform(-0.01, 0.01)), 2)
+            c = round(o * (1 + random.uniform(-0.01, 0.01)), 2)
+            h = round(max(o, c) * (1 + random.uniform(0, 0.005)), 2)
+            l = round(min(o, c) * (1 - random.uniform(0, 0.005)), 2)
+            
+            db.add(Candle(
+                symbol=symbol,
+                open=o,
+                high=h,
+                low=l,
+                close=c,
+                timestamp=ts
+            ))
+            last_close = c
+    await db.commit()
