@@ -8,7 +8,7 @@
  *  - Exponential backoff unchanged
  */
 
-const WS_BASE = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000'
+const WS_BASE = import.meta.env.VITE_WS_BASE_URL || 'wss://cupi-stock-broker-client-web-dashboard-1.onrender.com'
 
 export class StockWebSocket {
   constructor(token, { onMessage, onConnect, onDisconnect }) {

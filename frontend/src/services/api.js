@@ -3,7 +3,7 @@
  * Automatically attaches the Authorization: Bearer <token> header.
  */
 
-const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const BASE = import.meta.env.VITE_API_BASE_URL || 'https://cupi-stock-broker-client-web-dashboard-1.onrender.com'
 
 async function request(path, { method = 'GET', body, token } = {}) {
   const headers = { 'Content-Type': 'application/json' }
