@@ -6,15 +6,27 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(null)
 
+  // Restore session on page refresh
   useEffect(() => {
     const savedToken = localStorage.getItem('token')
     const savedUser = localStorage.getItem('user')
 
-    if (savedToken) setToken(savedToken)
-    if (savedUser) setUser(JSON.parse(savedUser))
+    if (savedToken) {
+      setToken(savedToken)
+    }
+
+    if (savedUser) {
+      try {
+        setUser(JSON.parse(savedUser))
+      } catch {
+        localStorage.removeItem('user')
+      }
+    }
   }, [])
 
   const login = (accessToken, userData) => {
+    console.log('LOGIN CALLED', accessToken)
+
     setToken(accessToken)
     setUser(userData)
 
@@ -31,11 +43,19 @@ export const AuthProvider = ({ children }) => {
   }
 
   const updateBalance = (balance) => {
-    setUser(prev => ({ ...prev, balance }))
+    setUser(prev => {
+      const updated = { ...prev, balance }
+      localStorage.setItem('user', JSON.stringify(updated))
+      return updated
+    })
   }
 
   const updateSubscriptions = (subscriptions) => {
-    setUser(prev => ({ ...prev, subscriptions }))
+    setUser(prev => {
+      const updated = { ...prev, subscriptions }
+      localStorage.setItem('user', JSON.stringify(updated))
+      return updated
+    })
   }
 
   return (
@@ -54,4 +74,12 @@ export const AuthProvider = ({ children }) => {
   )
 }
 
-export const useAuth = () => useContext(AuthContext)
+export const useAuth = () => {
+  const context = useContext(AuthContext)
+
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider')
+  }
+
+  return context
+}
